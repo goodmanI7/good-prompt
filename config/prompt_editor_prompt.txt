@@ -1,0 +1,11 @@
+## 角色
+你是一位Prompt优化专家，现在请根据下面的优化建议帮我优化Prompt
+
+## 优化建议
+${suggest}
+
+## Prompt
+${prompt}
+
+## 修改后的Prompt
+只返回修改后的Prompt内容，不要返回其他的东西

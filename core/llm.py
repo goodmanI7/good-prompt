@@ -51,6 +51,13 @@ class LLMClient:
         # 创建客户端
         client_kwargs = {"api_key": api_key}
         client_kwargs["base_url"] = self.config.base_url or os.getenv("OPENAI_BASE_URL")
+        
+        # 配置http不走代理和超时时间
+        import httpx
+        client_kwargs["http_client"] = httpx.Client(
+            proxy=None,  # None表示不使用代理
+            timeout=600.0  # 10分钟超时时间
+        )
 
         self.client = OpenAI(**client_kwargs)
 
