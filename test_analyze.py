@@ -1,5 +1,6 @@
 import json
 import os
+from string import Template
 from typing import Dict, List
 from core.analyzer import (
     PromptAnalyzeDimension,
@@ -31,6 +32,11 @@ def _get_prompt(scene: str):
         return f.read()
 
 
+def _get_content(scene: str):
+    with open(f"tmp/{scene}/content.txt", "r", encoding="utf-8") as f:
+        return f.read()
+
+
 def _get_system_prompt():
     with open("tmp/system_prompt.txt", "r", encoding="utf-8") as f:
         return f.read()
@@ -56,7 +62,15 @@ def _get_optimize_prompt():
         return f.read()
 
 
-def analyze(scene: str):
+def analyze(scene: str, use_cache: bool = False):
+    if use_cache and os.path.exists(f"tmp/{scene}/cache/analyze_response.json"):
+        with open(
+            f"tmp/{scene}/cache/analyze_response.json", "r", encoding="utf-8"
+        ) as f:
+            analyze_str = f.read()
+            if analyze_str:
+                return PromptAnalyzeResult.from_json(analyze_str)
+
     analyzer = PromptAnalyzer(
         config=PromptAnalyzerConfig(
             llm_config=LLMConfig(
@@ -65,15 +79,31 @@ def analyze(scene: str):
             dimensions=_get_dimensions(scene),
         )
     )
-    return analyzer.analyze(
+    result = analyzer.analyze(
         prompt=_get_prompt(scene),
         llm_response=_get_llm_response(scene),
         llm_thinking=_get_llm_thinking(scene),
         suggest=_get_suggest(scene),
     )
 
+    with open(f"tmp/{scene}/cache/analyze_response.json", "w", encoding="utf-8") as f:
+        f.write(result.to_json())
+    return result
 
-def optimize(analyze_result: PromptAnalyzeResult, suggest: str, scene: str):
+
+def optimize(
+    analyze_result: PromptAnalyzeResult,
+    suggest: str,
+    scene: str,
+    use_cache: bool = False,
+):
+    if use_cache and os.path.exists(f"tmp/{scene}/cache/optimize_response.json"):
+        with open(
+            f"tmp/{scene}/cache/optimize_response.json", "r", encoding="utf-8"
+        ) as f:
+            optimize_str = f.read()
+            if optimize_str:
+                return OptimizeResult.from_json(optimize_str)
     optimizer = Optimizer(
         config=OptimizerConfig(
             llm_config=LLMConfig(
@@ -98,6 +128,8 @@ def optimize(analyze_result: PromptAnalyzeResult, suggest: str, scene: str):
             llm_response=llm_response,
         )
         optimize_result.data.extend(_optimize_result.data)
+    with open(f"tmp/{scene}/cache/optimize_response.json", "w", encoding="utf-8") as f:
+        f.write(optimize_result.to_json())
     return optimize_result
 
 
@@ -109,38 +141,13 @@ def prompt_editor(prompt: str, suggest: str):
     )
     return prompt_editor.edit(prompt=prompt, suggest=suggest)
 
+
 def main(scene: str, use_cache: bool = False):
-    analyze_result = None
-    if use_cache and os.path.exists(f"tmp/{scene}/cache/analyze_response.json"):
-        with open(
-            f"tmp/{scene}/cache/analyze_response.json", "r", encoding="utf-8"
-        ) as f:
-            analyze_str = f.read()
-            if analyze_str:
-                analyze_result = PromptAnalyzeResult.from_json(analyze_str)
-    if not analyze_result:
-        analyze_result = analyze(scene)
-        with open(
-            f"tmp/{scene}/cache/analyze_response.json", "w", encoding="utf-8"
-        ) as f:
-            json.dump(analyze_result.to_dict(), f, ensure_ascii=False, indent=2)
+    analyze_result = analyze(scene, use_cache)
     print(analyze_result)
-    optimize_result = None
-    if use_cache and os.path.exists(f"tmp/{scene}/cache/optimize_response.json"):
-        with open(
-            f"tmp/{scene}/cache/optimize_response.json", "r", encoding="utf-8"
-        ) as f:
-            optimize_str = f.read()
-            if optimize_str:
-                optimize_result = OptimizeResult.from_json(optimize_str)
-    if not optimize_result:
-        optimize_result = optimize(
-            analyze_result, suggest=_get_suggest(scene), scene=scene
-        )
-        with open(
-            f"tmp/{scene}/cache/optimize_response.json", "w", encoding="utf-8"
-        ) as f:
-            json.dump(optimize_result.to_dict(), f, ensure_ascii=False, indent=2)
+    optimize_result = optimize(
+        analyze_result, suggest=_get_suggest(scene), scene=scene, use_cache=use_cache
+    )
     print("-" * 100)
     print(optimize_result)
     print("-" * 100)
@@ -150,7 +157,13 @@ def main(scene: str, use_cache: bool = False):
     )
     print(prompt_editor_result)
     print("-" * 100)
+    with open(f"tmp/{scene}/system_prompt.txt", "w", encoding="utf-8") as f:
+        f.write(prompt_editor_result)
+    template = Template(prompt_editor_result)
+    print(template.substitute(content=_get_content(scene)))
+    print("-" * 100)
 
 
 if __name__ == "__main__":
-    main(scene="novel", use_cache=True)
+    main(scene="novel", use_cache=False)
+    # main(scene="jianli", use_cache=True)
